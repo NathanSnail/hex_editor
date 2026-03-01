@@ -1,6 +1,7 @@
-[package]
-name = "hex_editor"
-version = "0.1.0"
-edition = "2024"
+[workspace]
+members = [
+    "hex_editor",
+    "hex_language",
+]
 
-[dependencies]
+resolver = "2"
