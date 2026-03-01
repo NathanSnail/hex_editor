@@ -5,3 +5,5 @@ edition = "2024"
 
 [dependencies]
 mlua = { version = "0.11.6", features = ["luajit52", "vendored"] }
+thiserror = "2.0.18"
+zerocopy = "0.8.40"
