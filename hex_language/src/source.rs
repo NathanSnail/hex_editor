@@ -68,3 +68,14 @@ impl Source for File {
         self.path.to_str().expect("Paths must be unicode")
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_memory_read() {
+        let file = MemoryFile::new("Something".to_owned(), 4);
+        assert_eq!(file.read(), Some(vec![0; 4].into_boxed_slice()));
+    }
+}
