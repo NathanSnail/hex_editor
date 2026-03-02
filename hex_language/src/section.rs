@@ -1,9 +1,9 @@
 use std::{cell::Cell, collections::HashMap, ops::Range};
 
 use thiserror::Error;
-use zerocopy::FromBytes;
+use zerocopy::{FromBytes, Immutable, IntoBytes};
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, PartialEq, Eq)]
 pub enum CursorError {
     #[error("cursor position out of range")]
     OutOfBounds,
@@ -36,6 +36,8 @@ pub struct Section {
 }
 
 impl Section {
+    /// Reads `amount` bytes from the current cursor position and advances the cursor, does nothing
+    /// if it cannot be read
     pub fn read(&self, amount: usize) -> Option<Ranged<&[u8]>> {
         let pos = self.get_cursor();
         let end = pos + amount;
@@ -49,11 +51,30 @@ impl Section {
         })
     }
 
+    /// Reads a `T` from the current cursor position and advances the cursor, does nothing if it
+    /// cannot be read
     pub fn read_cast<T: FromBytes>(&self) -> Option<T> {
         self.read(size_of::<T>()).map(|x| {
             T::read_from_bytes(x.value)
                 .expect("Ranged data should always be the correct size for T")
         })
+    }
+
+    /// Writes `bytes` at the current cursor and advances the cursor, does nothing if it cannot be
+    /// written
+    pub fn write(&mut self, bytes: &[u8]) -> Result<(), CursorError> {
+        let start = self.get_cursor();
+        self.set_cursor(start + bytes.len())?;
+        let end = self.get_cursor();
+        self.bytes[start..end].copy_from_slice(bytes);
+        Ok(())
+    }
+
+    /// Writes `value` at the current cursor and advances the cursor, does nothing if it cannot be
+    /// written
+    pub fn write_cast<T: IntoBytes + Immutable>(&mut self, value: T) -> Result<(), CursorError> {
+        let bytes = value.as_bytes();
+        self.write(bytes)
     }
 
     pub fn get_cursor(&self) -> usize {
@@ -76,6 +97,10 @@ impl Section {
             id: id,
         }
     }
+
+    pub fn id(&self) -> SectionID {
+        self.id
+    }
 }
 
 #[derive(Default, Clone)]
@@ -85,17 +110,21 @@ pub struct SectionRegistry {
 }
 
 impl SectionRegistry {
-    pub fn new_section(&mut self, bytes: Box<[u8]>) -> &Section {
+    pub fn new_section(&mut self, bytes: Box<[u8]>) -> &mut Section {
         let id = self.next_id;
         self.next_id.0 += 1;
         self.sections.insert(id, Section::new(bytes, id));
         self.sections
-            .get(&id)
+            .get_mut(&id)
             .expect("Inserted section should exist")
     }
 
     pub fn get_section(&self, id: SectionID) -> Option<&Section> {
         self.sections.get(&id)
+    }
+
+    pub fn get_section_mut(&mut self, id: SectionID) -> Option<&mut Section> {
+        self.sections.get_mut(&id)
     }
 }
 
@@ -116,5 +145,18 @@ mod tests {
         let second: u32 = section.read_cast::<U32<LE>>().unwrap().into();
         assert_eq!(second, 0x01ff);
         assert_eq!(section.read_cast::<U32<LE>>(), None)
+    }
+
+    #[test]
+    fn write_bytes() {
+        let mut section_registry = SectionRegistry::default();
+        let section = section_registry.new_section(Box::new([0x00, 0x00, 0x00, 0x00]));
+
+        let value: U32<LE> = 0x1234.into();
+        section.write_cast(value).unwrap();
+        assert_eq!(section.write_cast(1234), Err(CursorError::OutOfBounds));
+
+        section.set_cursor(0).unwrap();
+        assert_eq!(value, section.read_cast::<U32<LE>>().unwrap());
     }
 }
