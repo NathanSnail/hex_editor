@@ -78,4 +78,12 @@ mod tests {
         let file = MemoryFile::new("Something".to_owned(), 4);
         assert_eq!(file.read(), Some(vec![0; 4].into_boxed_slice()));
     }
+
+    #[test]
+    fn test_memory_write() {
+        let mut file = MemoryFile::new("Something".to_owned(), 0);
+        let content = vec![1, 2, 3, 4].into_boxed_slice();
+        file.write(&content).unwrap();
+        assert_eq!(file.read(), Some(content));
+    }
 }
