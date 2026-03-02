@@ -1,4 +1,6 @@
-use mlua::{AsChunk, Chunk, Lua};
+use std::sync::Arc;
+
+use mlua::{AsChunk, Chunk, ExternalError, Lua};
 
 use crate::section::SectionRegistry;
 
@@ -11,8 +13,7 @@ impl ScriptableRegistry {
     fn add_api(lua: &Lua) {
         let greet = lua
             .create_function(|_, name: String| {
-                println!("Hello {name}");
-                Ok(2)
+                name.parse::<u32>().map_err(ExternalError::into_lua_err)
             })
             .unwrap();
 
@@ -21,7 +22,7 @@ impl ScriptableRegistry {
 
     pub fn new(registry: SectionRegistry) -> Self {
         let lua = Lua::new();
-        ScriptableRegistry::add_api(lua);
+        ScriptableRegistry::add_api(&lua);
         Self { registry, lua }
     }
 
@@ -40,7 +41,7 @@ mod tests {
         let scriptable_registry = ScriptableRegistry::new(registry);
         assert_eq!(
             scriptable_registry
-                .load("greet('foo')")
+                .load("greet('2')")
                 .eval::<u32>()
                 .unwrap(),
             2
