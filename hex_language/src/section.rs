@@ -118,9 +118,9 @@ impl Section {
 
     pub fn new(bytes: Box<[u8]>, id: SectionID) -> Self {
         Self {
-            bytes: bytes,
+            bytes,
             cursor: 0.into(),
-            id: id,
+            id,
         }
     }
 
