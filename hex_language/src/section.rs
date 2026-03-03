@@ -16,6 +16,12 @@ pub enum CursorError {
 #[derive(Copy, Clone, Default, Hash, PartialEq, Eq, Debug)]
 pub struct SectionID(usize);
 
+impl SectionID {
+    pub unsafe fn from_usize(id: usize) -> Self {
+        Self(id)
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Ranged<T> {
     section: SectionID,
