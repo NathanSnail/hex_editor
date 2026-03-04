@@ -46,7 +46,7 @@ fn lua_read_bytes(
 fn lua_read_cast<T: FromBytes + Copy>(
     name: &'static str,
     registry: Arc<Mutex<SectionRegistry>>,
-    lua: &Lua,
+    _: &Lua,
     section_id: usize,
 ) -> Result<T, Error> {
     // SAFETY: if this wasn't a valid SectionID then we will just return a lua error
@@ -182,5 +182,26 @@ mod tests {
             .call::<u32>(id)
             .unwrap();
         assert_eq!(as_u32, 0x04030201);
+    }
+
+    #[test]
+    fn lua_read_bi16() {
+        let registry = SectionRegistry::default();
+        let scriptable_registry = ScriptableRegistry::new(Arc::new(Mutex::new(registry)));
+        let bytes = [0x80, 0x10];
+        let id = scriptable_registry
+            .registry
+            .lock()
+            .unwrap()
+            .new_section(Box::new(bytes))
+            .id()
+            .to_usize();
+        let as_u32 = scriptable_registry
+            .load("return function(n) return read_bi16(n) end")
+            .eval::<Function>()
+            .unwrap()
+            .call::<i16>(id)
+            .unwrap();
+        assert_eq!(as_u32, (0x10i64 - (1 << 15)).try_into().unwrap());
     }
 }
