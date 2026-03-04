@@ -20,6 +20,10 @@ impl SectionID {
     pub unsafe fn from_usize(id: usize) -> Self {
         Self(id)
     }
+
+    pub fn to_usize(self) -> usize {
+        self.0
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
