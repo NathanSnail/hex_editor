@@ -92,7 +92,7 @@ mod tests {
             .registry
             .lock()
             .unwrap()
-            .new_section(Box::new(bytes.clone()))
+            .new_section(Box::new(bytes))
             .id()
             .to_usize();
         let table = scriptable_registry
