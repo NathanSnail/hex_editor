@@ -2,7 +2,8 @@ mod lua_errors;
 use std::sync::{Arc, Mutex};
 
 use mlua::{AsChunk, Chunk, Error, FromLuaMulti, IntoLuaMulti, Lua, MaybeSend, Table};
-use zerocopy::{BE, FromBytes, LE, U32};
+use paste::paste;
+use zerocopy::{BE, FromBytes, I16, I32, I64, I128, LE, U16, U32, U64, U128};
 
 use crate::{
     lua_api::lua_errors::bad_argument,
@@ -90,21 +91,35 @@ impl ScriptableRegistry {
     }
 
     fn add_api(&self) {
+        // TODO: make this less repetitive with some paste / stringify magic
         macro_rules! primitive_read {
-            ($zerocopy_ty: ident, $native_ty: ty) => {
-                self.add_fn::<_, $zerocopy_ty<LE>, $native_ty>(
-                    concat!("read_l", stringify!($native_ty)),
+            ($bits: literal) => {
+                self.add_fn::<_, paste! {[<U $bits>]<LE> }, paste! {[<u $bits>]}>(
+                    concat!("read_lu", stringify!($bits)),
                     lua_read_cast,
                 );
-                self.add_fn::<_, $zerocopy_ty<BE>, $native_ty>(
-                    concat!("read_b", stringify!($native_ty)),
+                self.add_fn::<_, paste! {[<U $bits>]<BE> }, paste! {[<u $bits>]}>(
+                    concat!("read_bu", stringify!($bits)),
+                    lua_read_cast,
+                );
+                self.add_fn::<_, paste! {[<I $bits>]<LE> }, paste! {[<i $bits>]}>(
+                    concat!("read_li", stringify!($bits)),
+                    lua_read_cast,
+                );
+                self.add_fn::<_, paste! {[<I $bits>]<BE> }, paste! {[<i $bits>]}>(
+                    concat!("read_bi", stringify!($bits)),
                     lua_read_cast,
                 );
             };
         }
 
         self.add_fn::<_, _, Table>("read_bytes", lua_read_bytes);
-        primitive_read!(U32, u32);
+        self.add_fn::<_, i8, i8>("read_i8", lua_read_cast);
+        self.add_fn::<_, u8, u8>("read_u8", lua_read_cast);
+        primitive_read!(16);
+        primitive_read!(32);
+        primitive_read!(64);
+        primitive_read!(128);
     }
 
     pub fn new(registry: Arc<Mutex<SectionRegistry>>) -> Self {
