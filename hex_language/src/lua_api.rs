@@ -1,4 +1,4 @@
-mod lua_errors;
+mod errors;
 use std::sync::{Arc, Mutex};
 
 use mlua::{AsChunk, Chunk, Error, FromLuaMulti, IntoLuaMulti, Lua, MaybeSend, Table};
@@ -6,7 +6,7 @@ use paste::paste;
 use zerocopy::{BE, FromBytes, I16, I32, I64, I128, LE, U16, U32, U64, U128};
 
 use crate::{
-    lua_api::lua_errors::bad_argument,
+    lua_api::errors::bad_argument,
     section::{SectionID, SectionRegistry},
 };
 
