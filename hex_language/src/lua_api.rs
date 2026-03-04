@@ -2,7 +2,7 @@ mod lua_errors;
 use std::sync::{Arc, Mutex};
 
 use mlua::{AsChunk, Chunk, Error, FromLuaMulti, IntoLuaMulti, Lua, MaybeSend, Table};
-use zerocopy::{FromBytes, LE, U32};
+use zerocopy::{BE, FromBytes, LE, U32};
 
 use crate::{
     lua_api::lua_errors::bad_argument,
@@ -90,8 +90,21 @@ impl ScriptableRegistry {
     }
 
     fn add_api(&self) {
-        self.add_fn::<_, Table, Table>("read_bytes", lua_read_bytes);
-        self.add_fn::<_, U32<LE>, u32>("read_lu32", lua_read_cast::<U32<LE>>);
+        macro_rules! primitive_read {
+            ($zerocopy_ty: ident, $native_ty: ty) => {
+                self.add_fn::<_, $zerocopy_ty<LE>, $native_ty>(
+                    concat!("read_l", stringify!($native_ty)),
+                    lua_read_cast,
+                );
+                self.add_fn::<_, $zerocopy_ty<BE>, $native_ty>(
+                    concat!("read_b", stringify!($native_ty)),
+                    lua_read_cast,
+                );
+            };
+        }
+
+        self.add_fn::<_, _, Table>("read_bytes", lua_read_bytes);
+        primitive_read!(U32, u32);
     }
 
     pub fn new(registry: Arc<Mutex<SectionRegistry>>) -> Self {
