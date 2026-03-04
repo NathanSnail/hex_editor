@@ -204,4 +204,25 @@ mod tests {
             .unwrap();
         assert_eq!(as_u32, (0x10i64 - (1 << 15)).try_into().unwrap());
     }
+
+    #[test]
+    fn lua_read_u8() {
+        let registry = SectionRegistry::default();
+        let scriptable_registry = ScriptableRegistry::new(Arc::new(Mutex::new(registry)));
+        let bytes = [0x80];
+        let id = scriptable_registry
+            .registry
+            .lock()
+            .unwrap()
+            .new_section(Box::new(bytes))
+            .id()
+            .to_usize();
+        let as_u32 = scriptable_registry
+            .load("return function(n) return read_u8(n) end")
+            .eval::<Function>()
+            .unwrap()
+            .call::<u8>(id)
+            .unwrap();
+        assert_eq!(as_u32, bytes[0]);
+    }
 }
