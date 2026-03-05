@@ -1,5 +1,9 @@
 mod errors;
-use std::sync::{Arc, Mutex};
+use std::{
+    cell::{Ref, RefCell},
+    rc::Rc,
+    sync::{Arc, Mutex, MutexGuard},
+};
 
 use mlua::{AsChunk, Chunk, Error, FromLuaMulti, IntoLuaMulti, Lua, MaybeSend, Table};
 use paste::paste;
@@ -7,31 +11,39 @@ use zerocopy::{BE, FromBytes, I16, I32, I64, I128, LE, U16, U32, U64, U128};
 
 use crate::{
     lua_api::errors::bad_argument,
-    section::{SectionID, SectionRegistry},
+    section::{Section, SectionID, SectionRegistry},
 };
 
 pub struct ScriptableRegistry {
-    pub registry: Arc<Mutex<SectionRegistry>>,
+    pub registry: Rc<RefCell<SectionRegistry>>,
     lua: Lua,
+}
+
+fn get_section<'a>(
+    section_id: usize,
+    registry: &'a Rc<RefCell<SectionRegistry>>,
+    fn_name: &'static str,
+    pos: usize,
+) -> Result<Ref<'a, Section>, Error> {
+    // SAFETY: if this wasn't a valid SectionID then we will just return a lua error
+    let section_id = unsafe { SectionID::from_usize(section_id) };
+    Ref::filter_map(registry.borrow(), |reg| reg.get_section(section_id)).map_err(|_| {
+        bad_argument(
+            fn_name,
+            pos,
+            "section_id",
+            "Not a valid section id in the registry",
+        )
+    })
 }
 
 fn lua_read_bytes(
     name: &'static str,
-    registry: Arc<Mutex<SectionRegistry>>,
+    registry: Rc<RefCell<SectionRegistry>>,
     lua: &Lua,
     (section_id, amount): (usize, usize),
 ) -> Result<Table, Error> {
-    // SAFETY: if this wasn't a valid SectionID then we will just return a lua error
-    let section_id = unsafe { SectionID::from_usize(section_id) };
-    let lock = registry.lock().unwrap();
-    let section = lock.get_section(section_id).ok_or_else(|| {
-        bad_argument(
-            name,
-            1,
-            "section_id",
-            "Not a valid section id in the registry",
-        )
-    })?;
+    let section = get_section(section_id, &registry, name, 1)?;
     let bytes = section
         .read(amount)
         .ok_or_else(|| bad_argument(name, 2, "amount", "Attempted to read outside of bounds"))?;
@@ -45,21 +57,11 @@ fn lua_read_bytes(
 
 fn lua_read_cast<T: FromBytes + Copy>(
     name: &'static str,
-    registry: Arc<Mutex<SectionRegistry>>,
+    registry: Rc<RefCell<SectionRegistry>>,
     _: &Lua,
     section_id: usize,
 ) -> Result<T, Error> {
-    // SAFETY: if this wasn't a valid SectionID then we will just return a lua error
-    let section_id = unsafe { SectionID::from_usize(section_id) };
-    let lock = registry.lock().unwrap();
-    let section = lock.get_section(section_id).ok_or_else(|| {
-        bad_argument(
-            name,
-            1,
-            "section_id",
-            "Not a valid section id in the registry",
-        )
-    })?;
+    let section = get_section(section_id, &registry, name, 1)?;
     let value = section
         .read_cast::<T>()
         .ok_or_else(|| bad_argument(name, 2, "amount", "Attempted to read outside of bounds"))?;
@@ -67,11 +69,20 @@ fn lua_read_cast<T: FromBytes + Copy>(
     Ok(*value.value())
 }
 
+fn lua_write_bytes(
+    name: &'static str,
+    registry: Rc<RefCell<SectionRegistry>>,
+    lua: &Lua,
+    (section_id, bytes): (usize, Table),
+) -> Result<Table, Error> {
+    todo!()
+}
+
 impl ScriptableRegistry {
     fn add_fn<A, R, RL>(
         &self,
         name: &'static str,
-        func: impl Fn(&'static str, Arc<Mutex<SectionRegistry>>, &Lua, A) -> Result<R, Error>
+        func: impl Fn(&'static str, Rc<RefCell<SectionRegistry>>, &Lua, A) -> Result<R, Error>
         + MaybeSend
         + 'static,
     ) where
@@ -122,7 +133,7 @@ impl ScriptableRegistry {
         primitive_read!(128);
     }
 
-    pub fn new(registry: Arc<Mutex<SectionRegistry>>) -> Self {
+    pub fn new(registry: Rc<RefCell<SectionRegistry>>) -> Self {
         let lua = Lua::new();
         let registry = Self { registry, lua };
         registry.add_api();
@@ -143,12 +154,11 @@ mod tests {
     #[test]
     fn lua_read_bytes() {
         let registry = SectionRegistry::default();
-        let scriptable_registry = ScriptableRegistry::new(Arc::new(Mutex::new(registry)));
+        let scriptable_registry = ScriptableRegistry::new(Rc::new(RefCell::new(registry)));
         let bytes = [0x01, 0x02, 0x03, 0x04];
         let id = scriptable_registry
             .registry
-            .lock()
-            .unwrap()
+            .borrow_mut()
             .new_section(Box::new(bytes))
             .id()
             .to_usize();
@@ -166,12 +176,11 @@ mod tests {
     #[test]
     fn lua_read_lu32() {
         let registry = SectionRegistry::default();
-        let scriptable_registry = ScriptableRegistry::new(Arc::new(Mutex::new(registry)));
+        let scriptable_registry = ScriptableRegistry::new(Rc::new(RefCell::new(registry)));
         let bytes = [0x01, 0x02, 0x03, 0x04];
         let id = scriptable_registry
             .registry
-            .lock()
-            .unwrap()
+            .borrow_mut()
             .new_section(Box::new(bytes))
             .id()
             .to_usize();
@@ -187,12 +196,11 @@ mod tests {
     #[test]
     fn lua_read_bi16() {
         let registry = SectionRegistry::default();
-        let scriptable_registry = ScriptableRegistry::new(Arc::new(Mutex::new(registry)));
+        let scriptable_registry = ScriptableRegistry::new(Rc::new(RefCell::new(registry)));
         let bytes = [0x80, 0x10];
         let id = scriptable_registry
             .registry
-            .lock()
-            .unwrap()
+            .borrow_mut()
             .new_section(Box::new(bytes))
             .id()
             .to_usize();
@@ -208,12 +216,11 @@ mod tests {
     #[test]
     fn lua_read_u8() {
         let registry = SectionRegistry::default();
-        let scriptable_registry = ScriptableRegistry::new(Arc::new(Mutex::new(registry)));
+        let scriptable_registry = ScriptableRegistry::new(Rc::new(RefCell::new(registry)));
         let bytes = [0x80];
         let id = scriptable_registry
             .registry
-            .lock()
-            .unwrap()
+            .borrow_mut()
             .new_section(Box::new(bytes))
             .id()
             .to_usize();
