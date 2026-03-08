@@ -58,7 +58,7 @@ impl Source for File {
     }
 
     fn write(&mut self, bytes: &[u8]) -> Result<(), WriteError> {
-        fs::write(&self.path, bytes).map_err(|err| WriteError::FileWriteFailed(err))
+        fs::write(&self.path, bytes).map_err(WriteError::FileWriteFailed)
     }
 
     fn name(&self) -> &str {

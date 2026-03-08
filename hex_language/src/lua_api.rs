@@ -2,7 +2,6 @@ mod errors;
 use std::{
     cell::{Ref, RefCell},
     rc::Rc,
-    sync::{Arc, Mutex, MutexGuard},
 };
 
 use mlua::{AsChunk, Chunk, Error, FromLuaMulti, IntoLuaMulti, Lua, MaybeSend, Table};
