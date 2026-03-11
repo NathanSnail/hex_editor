@@ -101,35 +101,30 @@ impl ScriptableRegistry {
     }
 
     fn add_api(&self) {
-        // TODO: make this less repetitive with some paste / stringify magic
-        macro_rules! primitive_read {
+        macro_rules! primitive_type_read {
+            ($bits: literal, $signedness: ident, $endianness: ident) => {
+                self.add_fn::<_, paste! {[<$signedness $bits>]<[<$endianness E>]> }, paste! {[<$signedness:lower $bits>]}>(
+                    paste! {concat!("read_", stringify!([<$endianness:lower $signedness:lower>]), stringify!($bits))},
+                    lua_read_cast,
+                )
+            };
+        }
+        macro_rules! primitive_bit_read {
             ($bits: literal) => {
-                self.add_fn::<_, paste! {[<U $bits>]<LE> }, paste! {[<u $bits>]}>(
-                    concat!("read_lu", stringify!($bits)),
-                    lua_read_cast,
-                );
-                self.add_fn::<_, paste! {[<U $bits>]<BE> }, paste! {[<u $bits>]}>(
-                    concat!("read_bu", stringify!($bits)),
-                    lua_read_cast,
-                );
-                self.add_fn::<_, paste! {[<I $bits>]<LE> }, paste! {[<i $bits>]}>(
-                    concat!("read_li", stringify!($bits)),
-                    lua_read_cast,
-                );
-                self.add_fn::<_, paste! {[<I $bits>]<BE> }, paste! {[<i $bits>]}>(
-                    concat!("read_bi", stringify!($bits)),
-                    lua_read_cast,
-                );
+                primitive_type_read!($bits, U, L);
+                primitive_type_read!($bits, I, L);
+                primitive_type_read!($bits, U, B);
+                primitive_type_read!($bits, I, B);
             };
         }
 
         self.add_fn::<_, _, Table>("read_bytes", lua_read_bytes);
         self.add_fn::<_, i8, i8>("read_i8", lua_read_cast);
         self.add_fn::<_, u8, u8>("read_u8", lua_read_cast);
-        primitive_read!(16);
-        primitive_read!(32);
-        primitive_read!(64);
-        primitive_read!(128);
+        primitive_bit_read!(16);
+        primitive_bit_read!(32);
+        primitive_bit_read!(64);
+        primitive_bit_read!(128);
     }
 
     pub fn new(registry: Rc<RefCell<SectionRegistry>>) -> Self {
