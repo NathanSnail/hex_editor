@@ -5,3 +5,4 @@ edition = "2024"
 
 [dependencies]
 hex_language = { path = "../hex_language/" }
+ratatui = "0.30.0"
